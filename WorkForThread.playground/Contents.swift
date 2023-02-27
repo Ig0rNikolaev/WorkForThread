@@ -24,30 +24,32 @@ public struct Chip {
 }
 
 class Repository {
+    private let сondition = NSCondition()
     private var repository = [Chip]()
-    private let queue = DispatchQueue(label: "queueRepository", attributes: .concurrent)
-    var countRepository: Int {
-        return queue.sync {
-            repository.count
-        }
+    private var isPredicate = false
+
+    func appendChip(_ element: Chip) {
+        сondition.lock()
+        repository.append(element)
+        isPredicate = true
+        сondition.signal()
+        сondition.unlock()
     }
 
-    func appendChip(chip: Chip) {
-        queue.async(flags: .barrier) {
-            self.repository.append(chip)
+    func removeChip() -> Chip? {
+        var сhip: Chip?
+        сondition.lock()
+        while !isPredicate {
+            сondition.wait()
+            сhip = repository.removeLast()
         }
-    }
-
-    func removeChip() -> Chip {
-        return queue.sync(flags: .barrier) {
-            repository.removeLast()
-        }
+        isPredicate = false
+        сondition.unlock()
+        return сhip
     }
 }
 
 class GeneratingThread: Thread {
-    static let condition = NSCondition()
-    static var isPredicate = false
     private let repository: Repository
     private let dateFormatter = DateFormatter()
 
@@ -57,13 +59,11 @@ class GeneratingThread: Thread {
     }
 
     override public func main() {
-        (0..<10).forEach { _ in
-            GeneratingThread.condition.lock()
-            repository.appendChip(chip: Chip.make())
-            print("\(dateFormatter.string(from: Date())): \(repository.countRepository) чип создан.")
-            !GeneratingThread.isPredicate
-            GeneratingThread.condition.signal()
-            GeneratingThread.condition.unlock()
+        let addingTime = Date().addingTimeInterval(20)
+        while Date() < addingTime {
+            let chip = Chip.make()
+            repository.appendChip(chip)
+            print("\(dateFormatter.string(from: Date())) - \(Thread.current.name ?? "") - чип создан")
             GeneratingThread.sleep(forTimeInterval: 2)
         }
     }
@@ -79,18 +79,19 @@ class WorkerThread: Thread {
     }
 
     override public func main() {
-        (0..<10).forEach { _ in
-            if !GeneratingThread.isPredicate {
-                GeneratingThread.condition.wait()
-            }
-            repository.removeChip().sodering()
-            print("\(dateFormatter.string(from: Date())): \(repository.countRepository) чип припаян.")
+        while true {
+            repository.removeChip()?.sodering()
+            print("\(dateFormatter.string(from: Date())) - \(Thread.current.name ?? " ") - чип удален")
         }
     }
 }
 
 let repository = Repository()
+
 let generatingThread = GeneratingThread(repository: repository)
-let workerThread = WorkerThread(repository: repository)
+generatingThread.name = "GENR"
 generatingThread.start()
+
+let workerThread = WorkerThread(repository: repository)
+workerThread.name = "WORK"
 workerThread.start()
