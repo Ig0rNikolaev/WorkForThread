@@ -82,6 +82,7 @@ class WorkerThread: Thread {
         while true {
             repository.removeChip()?.sodering()
             print("\(dateFormatter.string(from: Date())) - \(Thread.current.name ?? " ") - чип удален")
+            WorkerThread.sleep(forTimeInterval: 2)
         }
     }
 }
