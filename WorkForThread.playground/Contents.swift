@@ -52,6 +52,7 @@ class Repository {
 class GeneratingThread: Thread {
     private let repository: Repository
     private let dateFormatter = DateFormatter()
+    private var timer = Timer()
 
     public init(repository: Repository) {
         self.repository = repository
@@ -59,13 +60,12 @@ class GeneratingThread: Thread {
     }
 
     override public func main() {
-        let addingTime = Date().addingTimeInterval(20)
-        while Date() < addingTime {
+        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: (true)) { [self] _ in
             let chip = Chip.make()
             repository.appendChip(chip)
             print("\(dateFormatter.string(from: Date())) - \(Thread.current.name ?? "") - чип создан")
-            GeneratingThread.sleep(forTimeInterval: 2)
         }
+        RunLoop.current.run(until: Date().addingTimeInterval(20))
     }
 }
 
@@ -82,7 +82,6 @@ class WorkerThread: Thread {
         while true {
             repository.removeChip()?.sodering()
             print("\(dateFormatter.string(from: Date())) - \(Thread.current.name ?? " ") - чип удален")
-            WorkerThread.sleep(forTimeInterval: 2)
         }
     }
 }
